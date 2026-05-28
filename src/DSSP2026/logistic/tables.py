@@ -12,8 +12,8 @@ from pathlib import Path
 import pandas as pd
 from statsmodels.discrete.discrete_model import BinaryResultsWrapper
 
-from modules.core.style import ATT_COLORS, att_table_styles
-from modules.core.tables import _CAPTION_STYLE, save_generic_table_png
+from DSSP2026.core.style import ATT_COLORS, att_table_styles
+from DSSP2026.core.tables import _CAPTION_STYLE, save_generic_table_png
 
 
 def style_logit_coefficients(coef_df: pd.DataFrame, model: BinaryResultsWrapper,

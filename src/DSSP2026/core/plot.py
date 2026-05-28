@@ -14,7 +14,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 
-from modules.core.style import ATT_COLORS, ATT_PALETTE, ATT_SEQUENTIAL
+from DSSP2026.core.style import ATT_COLORS, ATT_PALETTE, ATT_SEQUENTIAL
 
 
 # ---------------------------------------------------------------------------

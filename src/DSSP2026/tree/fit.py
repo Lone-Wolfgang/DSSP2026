@@ -10,7 +10,7 @@ from typing import Optional, Sequence
 
 import pandas as pd
 
-from modules.core.metrics import regression_metrics
+from DSSP2026.core.metrics import regression_metrics
 
 
 @dataclass

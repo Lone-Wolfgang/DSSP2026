@@ -12,9 +12,9 @@ from pathlib import Path
 import pandas as pd
 from statsmodels.regression.linear_model import RegressionResultsWrapper
 
-from modules.core.style import ATT_COLORS, att_table_styles, _SIZE_PRESETS
-from modules.core.tables import save_table_by_extension
-from modules.regression.fit import _detect_extrapolation
+from DSSP2026.core.style import ATT_COLORS, att_table_styles, _SIZE_PRESETS
+from DSSP2026.core.tables import save_table_by_extension
+from DSSP2026.regression.fit import _detect_extrapolation
 
 
 _CAPTION_STYLE = [

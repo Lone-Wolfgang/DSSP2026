@@ -12,9 +12,9 @@ from typing import Optional
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from modules.regression.fit import fit_ols, predict_ols, _fill_missing_predictors
-from modules.regression import plot as rplots
-from modules.regression import tables as rtables
+from DSSP2026.regression.fit import fit_ols, predict_ols, _fill_missing_predictors
+from DSSP2026.regression import plots as rplots
+from DSSP2026.regression import tables as rtables
 
 
 def fit_and_plot_ols(df, formula, *, alpha=0.05, plot_kind="auto",

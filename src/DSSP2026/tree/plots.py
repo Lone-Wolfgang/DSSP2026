@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from modules.core.style import ATT_SEQUENTIAL, ATT_COLORS
+from DSSP2026.core.style import ATT_SEQUENTIAL, ATT_COLORS
 
 
 def plot_depth_elbow(results_df: pd.DataFrame, elbow: int, *,

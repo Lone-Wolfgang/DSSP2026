@@ -15,8 +15,8 @@ from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from modules.core.style import ATT_COLORS, att_table_styles, _SIZE_PRESETS
-from modules.core.plot import r2_col
+from DSSP2026.core.style import ATT_COLORS, att_table_styles, _SIZE_PRESETS
+from DSSP2026.core.plot import r2_col
 
 
 _CAPTION_STYLE = [

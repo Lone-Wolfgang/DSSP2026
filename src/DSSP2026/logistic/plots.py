@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from modules.core.style import ATT_COLORS
+from DSSP2026.core.style import ATT_COLORS
 
 
 def plot_odds_ratios(
@@ -91,7 +91,7 @@ def plot_odds_ratios(
 
 def save_odds_ratios_png(coef_df, path, *, drop_intercept=True, log_scale=True,
                          dpi=220, **kwargs):
-    from modules.core.plot import save_figure
+    from DSSP2026.core.plot import save_figure
     fig = plot_odds_ratios(coef_df, drop_intercept=drop_intercept,
                            log_scale=log_scale, **kwargs)
     return save_figure(fig, path, dpi=dpi)

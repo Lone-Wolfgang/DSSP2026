@@ -7,6 +7,6 @@ tree-specific tables (feature importance, leaf summaries, etc.) here as they
 come up.
 """
 
-from modules.core.tables import style_tree_metrics_table  # re-export for convenience
+from DSSP2026.core.tables import style_tree_metrics_table  # re-export for convenience
 
 __all__ = ["style_tree_metrics_table"]

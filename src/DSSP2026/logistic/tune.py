@@ -15,7 +15,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from modules.core.metrics import roc_curve_points
+from DSSP2026.core.metrics import roc_curve_points
 
 
 @dataclass

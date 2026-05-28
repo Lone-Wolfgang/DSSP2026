@@ -21,7 +21,7 @@ import pandas as pd
 import statsmodels.formula.api as smf
 from patsy import EvalEnvironment
 from statsmodels.discrete.discrete_model import BinaryResultsWrapper
-from modules.core.encoders import FORMULA_NAMESPACE
+from DSSP2026.core.encoders import FORMULA_NAMESPACE
 
 
 # ---------------------------------------------------------------------------

@@ -18,9 +18,9 @@ from scipy import stats
 from statsmodels.regression.linear_model import RegressionResultsWrapper
 from statsmodels.nonparametric.smoothers_lowess import lowess
 
-from modules.core.style import ATT_COLORS, ATT_PALETTE, ATT_SEQUENTIAL
-from modules.core.plot import apply_plotly_att_style
-from modules.regression.fit import (
+from DSSP2026.core.style import ATT_COLORS, ATT_PALETTE, ATT_SEQUENTIAL
+from DSSP2026.core.plot import apply_plotly_att_style
+from DSSP2026.regression.fit import (
     numeric_predictors,
     categorical_predictors,
     make_ols_diagnostics_df,
