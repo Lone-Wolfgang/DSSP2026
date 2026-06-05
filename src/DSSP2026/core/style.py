@@ -7,6 +7,7 @@ Usage:
     apply_att_style(context="presentation")    # bigger, for slides
 """
 
+import math
 import warnings
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -40,8 +41,11 @@ ATT_COLORS = {
     "teal":       "#00857C",
     "gold":       "#C99000",   # darkened from #FFB81C for contrast
     "magenta":    "#C8102E",
+    "magenta_light": "#FEF0F4",
     "purple":     "#6E3FA3",
+    "green_light": "#A4CEA6",
     "green":      "#2E7031",   # darkened from #3A8C3A for contrast
+
 
     # Neutrals (darker than before for legibility)
     "gray_900":   "#1A1A1A",
@@ -74,10 +78,10 @@ ATT_SEQUENTIAL = [
 
 ATT_DIVERGING = [
     ATT_COLORS["magenta"],
-    "#E88896",
-    ATT_COLORS["gray_100"],
-    ATT_COLORS["sky"],
-    ATT_COLORS["deep_blue"],
+    ATT_COLORS["magenta_light"],
+    ATT_COLORS["pale_sky"],
+    ATT_COLORS["green_light"],
+    ATT_COLORS["green"],
 ]
 
 
@@ -107,6 +111,25 @@ _SIZE_PRESETS = {
 }
 
 _SEABORN_CONTEXT = {"report": "notebook", "presentation": "talk"}
+
+# Relative size ratios, taken from the "report" preset with `tick` as the base
+# (ratio 1.0). When `base_size` is passed to apply_att_style, every element is
+# `base_size * ratio`, so one number scales the whole figure while preserving
+# the type hierarchy (suptitle > title > axis_label > tick ≈ legend > table).
+_SIZE_RATIOS = {
+    "suptitle":   24 / 14,
+    "title":      22 / 14,
+    "axis_label": 16 / 14,
+    "tick":       14 / 14,
+    "legend":     14 / 14,
+    "annotation": 13 / 14,
+    "table":      13 / 14,
+}
+
+
+def _sizes_from_base(base_size: float) -> dict:
+    """Scale every typographic element off a single base size, preserving ratios."""
+    return {k: base_size * ratio for k, ratio in _SIZE_RATIOS.items()}
 
 # Font preference order. The first available wins. We check at apply-time and
 # warn if we have to fall back past Helvetica/Arial — that tells the user
@@ -140,18 +163,31 @@ def _resolve_font():
 # ---------------------------------------------------------------------------
 # APPLY STYLE
 # ---------------------------------------------------------------------------
-def apply_att_style(context: str = "report"):
+def apply_att_style(context: str = "report", base_size: float = None):
     """Apply the AT&T plotting style globally.
 
     Parameters
     ----------
     context : {"report", "presentation"}
         Use "report" for figures in documents/notebooks, "presentation"
-        for slide decks (everything is sized larger).
+        for slide decks (everything is sized larger). Also selects the seaborn
+        context ("notebook" vs "talk").
+    base_size : float, optional
+        Override the preset sizing with a single base font size (in points).
+        Every text element scales proportionally off this — ticks sit at
+        ``base_size``, titles/labels above it, table/annotation slightly below
+        — preserving the type hierarchy. ``base_size=14`` reproduces the
+        "report" preset; ``~18`` approximates "presentation". When omitted,
+        the named ``context`` preset is used unchanged (backward compatible).
     """
     if context not in _SIZE_PRESETS:
         raise ValueError(f"context must be one of {list(_SIZE_PRESETS)}")
-    sizes = _SIZE_PRESETS[context]
+    if base_size is not None:
+        if base_size <= 0:
+            raise ValueError("base_size must be a positive number of points.")
+        sizes = _sizes_from_base(base_size)
+    else:
+        sizes = _SIZE_PRESETS[context]
     font_name = _resolve_font()
 
     # Start from a clean seaborn base, then override.
@@ -271,132 +307,7 @@ def att_table_styles(context: str = "report"):
     ]
 
 
-def att_format_table(
-    df,
-    *,
-    context: str = "report",
-    descriptor_col: str = None,
-    sig_figs: int = 3,
-    sci_upper: float = 1e5,
-    sci_lower: float = 1e-3,
-):
-    """Apply AT&T default formatting to a DataFrame for notebook display.
 
-    - Header row: centered, brand-blue background, white bold text.
-    - Descriptor column (first string-like column by default): bold, left-aligned.
-    - Numeric columns: formatted to `sig_figs` significant figures.
-      Values >= sci_upper or < sci_lower (and non-zero) use scientific notation.
-    - Zebra rows, explicit white background on odd rows (no transparency).
-    - Row hover highlight in pale AT&T blue.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-    context : {"report", "presentation"}
-    descriptor_col : str, optional
-        Name of the column to bold as a row label. If None, the first
-        column whose dtype is object/string is used automatically.
-        Pass False to skip bolding entirely.
-    sig_figs : int, default 3
-        Significant figures for numeric values.
-    sci_upper : float, default 1e5
-        Values >= this threshold render in scientific notation.
-    sci_lower : float, default 1e-3
-        Non-zero values whose absolute value < this render in scientific notation.
-
-    Returns
-    -------
-    pandas Styler — call .hide(axis="index") if you don't want the index shown.
-
-    Examples
-    --------
-    att_format_table(df)
-    att_format_table(df, descriptor_col="Metric", context="presentation")
-    att_format_table(df).hide(axis="index")
-    """
-    import pandas as pd
-
-    # ---- Identify the descriptor column ----------------------------------
-    if descriptor_col is None:
-        for col in df.columns:
-            if df[col].dtype == object or hasattr(df[col], "str"):
-                descriptor_col = col
-                break
-
-    # ---- Build per-column format functions -------------------------------
-    def _fmt_number(val):
-        """Format a single number to sig_figs with sci notation when needed."""
-        try:
-            if pd.isna(val):
-                return "—"
-        except (TypeError, ValueError):
-            return str(val)
-        if val == 0:
-            return "0"
-        abs_val = abs(val)
-        if abs_val >= sci_upper or abs_val < sci_lower:
-            # Scientific notation, sig_figs significant digits
-            decimals = sig_figs - 1
-            return f"{val:.{decimals}e}"
-        else:
-            # Fixed sig figs: figure out how many decimal places we need
-            import math
-            mag = math.floor(math.log10(abs_val))
-            decimal_places = max(0, sig_figs - 1 - mag)
-            return f"{val:,.{decimal_places}f}"
-
-    fmt = {}
-    numeric_cols = []
-    for col in df.columns:
-        if col == descriptor_col:
-            continue
-        if pd.api.types.is_integer_dtype(df[col]):
-            # Integers: just add comma thousands separator, no decimals
-            fmt[col] = lambda v: "—" if pd.isna(v) else f"{int(v):,}"
-            numeric_cols.append(col)
-        elif pd.api.types.is_numeric_dtype(df[col]):
-            fmt[col] = _fmt_number
-            numeric_cols.append(col)
-
-    # ---- Base table styles (centers headers) -----------------------------
-    sizes = _SIZE_PRESETS[context]
-    table_styles = [
-        {"selector": "th",
-         "props": [("background-color", ATT_COLORS["deep_blue"]),
-                   ("color",            ATT_COLORS["white"]),
-                   ("font-size",        f"{sizes['table']}pt"),
-                   ("font-weight",      "bold"),
-                   ("text-align",       "center"),       # <-- centered
-                   ("padding",          "10px 14px")]},
-        {"selector": "th.col_heading",
-         "props": [("text-align", "center")]},
-        {"selector": "th.row_heading",
-         "props": [("text-align", "left")]},
-        {"selector": "td",
-         "props": [("background-color", ATT_COLORS["white"]),
-                   ("font-size",        f"{sizes['table']}pt"),
-                   ("color",            ATT_COLORS["gray_900"]),
-                   ("padding",          "8px 14px"),
-                   ("text-align",       "right")]},        # numbers right-aligned
-        {"selector": "tr:nth-child(even) td",
-         "props": [("background-color", ATT_COLORS["gray_100"])]},
-        {"selector": "tr:hover td",
-         "props": [("background-color", ATT_COLORS["pale_sky"])]},
-        {"selector": "table",
-         "props": [("border-collapse", "collapse"),
-                   ("border",          f"1px solid {ATT_COLORS['gray_300']}"),
-                   ("width",           "100%")]},
-    ]
-
-    styler = df.style.set_table_styles(table_styles).format(fmt, na_rep="—")
-
-    # ---- Bold the descriptor column, left-align it -----------------------
-    if descriptor_col and descriptor_col in df.columns:
-        styler = styler.set_properties(
-            subset=[descriptor_col],
-            **{"font-weight": "bold",
-               "text-align": "left",
-               "color": ATT_COLORS["gray_900"]},
-        )
-
-    return styler
+def att_format_table(*args, **kwargs):
+    from DSSP2026.eda.tables import att_format_table as _att_format_table
+    return _att_format_table(*args, **kwargs)

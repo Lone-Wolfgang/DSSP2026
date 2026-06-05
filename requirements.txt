@@ -10,3 +10,11 @@ notebook
 ipykernel
 plotly
 datasets
+plotnine
+transformers
+sentence-transformers
+optuna
+transformers[torch]
+optuna-dashboard
+peft
+streamlit
