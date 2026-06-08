@@ -1,0 +1,195 @@
+{
+  "experiment_id": "20260608T044635",
+  "timestamp": "2026-06-08T04:47:05+00:00",
+  "eval_kind": "validation",
+  "eval_source": "split_from_train",
+  "models": [
+    "Logistic regression",
+    "Decision tree",
+    "Random forest",
+    "MLP",
+    "XGBoost"
+  ],
+  "feature_sets": {
+    "all": [
+      "age",
+      "length_of_stay",
+      "num_prior_admissions",
+      "has_diabetes",
+      "has_hypertension"
+    ]
+  },
+  "column_types": {
+    "age": "numeric",
+    "has_diabetes": "categorical",
+    "has_hypertension": "categorical",
+    "length_of_stay": "numeric",
+    "num_prior_admissions": "numeric"
+  },
+  "search_space": {
+    "Logistic regression": {
+      "params": [],
+      "sampler": "tpe"
+    },
+    "Decision tree": {
+      "params": [
+        {
+          "name": "max_depth",
+          "type": "int",
+          "low": 1,
+          "high": 19
+        }
+      ],
+      "sampler": "tpe"
+    },
+    "Random forest": {
+      "params": [
+        {
+          "name": "n_estimators",
+          "type": "categorical",
+          "choices": [
+            50,
+            100,
+            200,
+            300
+          ]
+        },
+        {
+          "name": "max_features",
+          "type": "categorical",
+          "choices": [
+            2,
+            3,
+            5,
+            "sqrt",
+            "log2"
+          ]
+        }
+      ],
+      "sampler": "grid"
+    },
+    "MLP": {
+      "params": [
+        {
+          "type": "group",
+          "collect": "hidden",
+          "count": {
+            "name": "n_layers",
+            "type": "int",
+            "low": 1,
+            "high": 4
+          },
+          "item": {
+            "name": "width",
+            "type": "int",
+            "low": 16,
+            "high": 512,
+            "log": true
+          }
+        },
+        {
+          "name": "activation",
+          "type": "categorical",
+          "choices": [
+            "relu",
+            "tanh"
+          ]
+        },
+        {
+          "name": "alpha",
+          "type": "float",
+          "low": 1e-06,
+          "high": 10.0,
+          "log": true
+        },
+        {
+          "name": "lr_init",
+          "type": "float",
+          "low": 0.0001,
+          "high": 0.1,
+          "log": true
+        }
+      ],
+      "sampler": "tpe"
+    },
+    "XGBoost": {
+      "params": [
+        {
+          "name": "n_estimators",
+          "type": "int",
+          "low": 100,
+          "high": 600,
+          "step": 50
+        },
+        {
+          "name": "max_depth",
+          "type": "int",
+          "low": 2,
+          "high": 10
+        },
+        {
+          "name": "learning_rate",
+          "type": "float",
+          "low": 0.001,
+          "high": 0.3,
+          "log": true
+        },
+        {
+          "name": "subsample",
+          "type": "float",
+          "low": 0.5,
+          "high": 1.0
+        },
+        {
+          "name": "colsample_bytree",
+          "type": "float",
+          "low": 0.5,
+          "high": 1.0
+        },
+        {
+          "name": "reg_lambda",
+          "type": "float",
+          "low": 0.001,
+          "high": 10.0,
+          "log": true
+        },
+        {
+          "name": "reg_alpha",
+          "type": "float",
+          "low": 0.001,
+          "high": 10.0,
+          "log": true
+        },
+        {
+          "name": "min_child_weight",
+          "type": "float",
+          "low": 1.0,
+          "high": 10.0
+        }
+      ],
+      "sampler": "tpe"
+    }
+  },
+  "n_trials": 20,
+  "n_splits": 5,
+  "scoring": "f1_macro",
+  "random_state": 42,
+  "datasets": {},
+  "experiment_dir": "/Users/jwkle/Documents/DSSP/readmission_run",
+  "id2label": null,
+  "train_parquet": ".artifacts/train.parquet",
+  "train_sha256": "a97c6d203187d915a43ff697910a38d4a05854f47b63e61baa44e4e3a5eb2306",
+  "test_parquet": ".artifacts/test.parquet",
+  "test_sha256": "73e2014256910b2083402cc75db9c7f775df9aab35bf5ea29bb5f8cce31ecd3a",
+  "validation_parquet": ".artifacts/validation.parquet",
+  "validation_sha256": "ab98eb44028384991a7756949400a46f501ef59dd54e26174f7375f26cf602b9",
+  "target": "readmit",
+  "status": "COMPLETE",
+  "artifacts": {
+    "optuna_db": ".artifacts/study.db",
+    "eval_db": ".artifacts/eval.db",
+    "report_db": "report.db",
+    "train_parquet": ".artifacts/train.parquet",
+    "test_parquet": ".artifacts/test.parquet"
+  }
+}
