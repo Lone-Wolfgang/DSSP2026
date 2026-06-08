@@ -30,6 +30,15 @@ from DSSP2026.core import metrics as CM
 from DSSP2026.experiment import objectives as OBJ
 from DSSP2026.experiment import spaces
 
+# Maps model display name -> sidecar family token used by write_feature_importance.
+_MODEL_FAMILY = {
+    "Logistic regression": "logistic",
+    "Decision tree":       "tree",
+    "Random forest":       "rf",
+    "MLP":                 "mlp",
+    "XGBoost":             "xgb",
+}
+
 
 @dataclass
 class EvalRecord:
@@ -50,11 +59,18 @@ class EvalRecord:
 
 @dataclass
 class StudyResult:
-    """Output of run_study: the Optuna study, the eval record, and trial rows."""
+    """Output of run_study: the Optuna study, the eval record, and trial rows.
+
+    ``fit_result`` holds the ClassificationResult subclass (TreeClassifyResult,
+    RFClassifyResult, XGBResult, MLPResult, or LogisticEval) returned by
+    _refit_winner. It is used by experiment.py to write feature importance into
+    the sidecar immediately after the study completes, then discarded.
+    """
     model: str
     study: object
     eval: EvalRecord
     trials: list = field(default_factory=list)
+    fit_result: object = field(default=None, repr=False)
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +95,17 @@ def select_one_se_trial(study):
     qualifying = [t for t in completed if t.value >= threshold]
     # Shallowest depth among qualifying trials (parsimony).
     return min(qualifying, key=lambda t: t.params["max_depth"])
+
+
+def _grid_from_spec(spec: list, feature_sets: Mapping[str, Sequence[str]]) -> dict:
+    grid = {"feature_set": list(feature_sets)}
+    for d in spec:
+        if d.get("type") == "categorical":
+            grid[d["name"]] = list(d["choices"])
+        elif d.get("type") == "int":
+            step = d.get("step", 1)
+            grid[d["name"]] = list(range(int(d["low"]), int(d["high"]) + 1, int(step)))
+    return grid
 
 
 def _build_eval_record(model, best_params, feature_set, features, best_cv_value,
@@ -126,13 +153,18 @@ def run_study(model, train, evaluation, *, target, feature_sets,
     model's search-space spec (defaults to the built-in for that model).
     """
     import optuna
-    from DSSP2026.tuning.search import run_optuna_search
+    from DSSP2026.experiment.tuning.search import run_optuna_search
     from DSSP2026.experiment.trials import trials_from_study
     from DSSP2026.experiment import spaces as SP
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    if spec is None:
-        spec = SP.default_space(model)
+    entry = spec or SP.normalize_search_space(None)[model]
+    if isinstance(entry, dict) and "params" in entry:
+        sampler_name = entry.get("sampler", SP.DEFAULT_SAMPLERS[model])
+        spec = entry["params"]
+    else:
+        sampler_name = SP.DEFAULT_SAMPLERS[model]
+        spec = entry
 
     # Build the objective + choose sampler.
     sampler = None
@@ -150,14 +182,7 @@ def run_study(model, train, evaluation, *, target, feature_sets,
         objective = OBJ.random_forest_objective(
             train, target, feature_sets, n_splits=n_splits, scoring=scoring,
             random_state=random_state, spec=spec)
-        # Grid sampler: exhaustive over feature_set x the spec's categorical
-        # choices, so editing the RF spec changes the grid (single source).
-        grid = {"feature_set": list(feature_sets)}
-        for d in spec:
-            if d.get("type") == "categorical":
-                grid[d["name"]] = list(d["choices"])
-        sampler = optuna.samplers.GridSampler(grid)
-        n = int(np.prod([len(v) for v in grid.values()]))
+        n = n_trials
     elif model == "MLP":
         from sklearn.preprocessing import LabelEncoder
         le = LabelEncoder().fit(train[target])
@@ -174,6 +199,11 @@ def run_study(model, train, evaluation, *, target, feature_sets,
         n = n_trials
     else:
         raise ValueError(f"unknown model {model!r}")
+
+    if model != "Logistic regression" and sampler_name == "grid":
+        grid = _grid_from_spec(spec, feature_sets)
+        sampler = optuna.samplers.GridSampler(grid)
+        n = int(np.prod([len(v) for v in grid.values()]))
 
     # Run the search (persisted to experiment.db if storage given).
     if sampler is not None:
@@ -205,7 +235,8 @@ def run_study(model, train, evaluation, *, target, feature_sets,
         model, best_params, feature_set, features, best_trial.value, res, detail)
 
     trials = trials_from_study(study, model=model)
-    return StudyResult(model=model, study=study, eval=eval_record, trials=trials)
+    return StudyResult(model=model, study=study, eval=eval_record, trials=trials,
+                       fit_result=res)
 
 
 def _refit_winner(model, train, evaluation, target, features, best_params,

@@ -78,6 +78,17 @@ _DEFAULT_SPACES = {
 }
 
 
+VALID_MODELS = (
+    "Logistic regression",
+    "Decision tree",
+    "Random forest",
+    "MLP",
+    "XGBoost",
+)
+GRID_MODELS = {"Random forest"}
+DEFAULT_SAMPLERS = {m: ("grid" if m in GRID_MODELS else "tpe") for m in VALID_MODELS}
+
+
 def default_space(model: str) -> list:
     """Return a deep copy of the built-in spec for ``model`` (safe to edit)."""
     if model not in _DEFAULT_SPACES:
@@ -88,6 +99,148 @@ def default_space(model: str) -> list:
 def default_spaces() -> dict:
     """All built-in specs as {model: spec} (deep-copied)."""
     return {m: copy.deepcopy(s) for m, s in _DEFAULT_SPACES.items()}
+
+
+def _validate_model(model: str):
+    if model not in VALID_MODELS:
+        raise ValueError(
+            f"unknown model {model!r}; valid models are {list(VALID_MODELS)}.")
+
+
+def _descriptor_names(spec: list) -> set:
+    names = set()
+    for d in spec:
+        if d.get("type") == "group":
+            names.add(d["count"]["name"])
+            names.add(d["item"]["name"])
+            names.add(d["collect"])
+        elif "name" in d:
+            names.add(d["name"])
+    return names
+
+
+def tunable_params(model: str) -> list[dict]:
+    """The tunable hyperparameters for `model`: name, type, and bounds/choices,
+    from the built-in default space. Raises for unknown model."""
+    _validate_model(model)
+    params = []
+    for d in _DEFAULT_SPACES[model]:
+        if d.get("type") == "group":
+            count = copy.deepcopy(d["count"])
+            count["group"] = d["collect"]
+            params.append(count)
+            item = copy.deepcopy(d["item"])
+            item["name"] = item["name"]
+            item["group"] = d["collect"]
+            params.append(item)
+        else:
+            params.append(copy.deepcopy(d))
+    return params
+
+
+def _grid_bad_descriptor(spec: list):
+    for d in spec:
+        if d.get("type") == "group":
+            return d["collect"], "group"
+        t = d.get("type")
+        if t == "categorical":
+            continue
+        if t == "int" and "low" in d and "high" in d and not d.get("log", False):
+            continue
+        return d.get("name", "<unnamed>"), t
+    return None
+
+
+def grid_compatible(model: str, spec: list | None = None) -> bool:
+    """True iff the (given or default) spec is fully discrete — every descriptor
+    is categorical, or int with finite low/high (no float, no log-float).
+    Grid search requires this."""
+    _validate_model(model)
+    spec = default_space(model) if spec is None else spec
+    return _grid_bad_descriptor(spec) is None
+
+
+def _format_descriptor(d: dict) -> str:
+    t = d.get("type")
+    name = d.get("name", d.get("collect", "<unnamed>"))
+    if t == "categorical":
+        return f"{name}: categorical choices={list(d['choices'])}"
+    if t in ("int", "float"):
+        bits = [f"{name}: {t}", f"{d['low']}..{d['high']}"]
+        if d.get("step") is not None:
+            bits.append(f"step={d['step']}")
+        if d.get("log"):
+            bits.append("log")
+        return " ".join(bits)
+    if t == "group":
+        return f"{d['collect']}: group count={d['count']['name']} item={d['item']['name']}"
+    return f"{name}: {t}"
+
+
+def describe(model: str | None = None) -> str:
+    """Human-readable summary: for each model (or one), list tunable params with
+    type + range/choices, the default sampler, and whether grid is available.
+    Returns a string."""
+    models = VALID_MODELS if model is None else (model,)
+    lines = []
+    for m in models:
+        _validate_model(m)
+        lines.append(f"{m}")
+        lines.append(f"  default sampler: {DEFAULT_SAMPLERS[m]}")
+        lines.append(f"  grid available: {'yes' if grid_compatible(m) else 'no'}")
+        spec = _DEFAULT_SPACES[m]
+        if not spec:
+            lines.append("  no tunable hyperparameters (one config per feature set)")
+        else:
+            lines.append("  tunable parameters:")
+            for d in spec:
+                lines.append(f"    - {_format_descriptor(d)}")
+    return "\n".join(lines)
+
+
+def _normalize_entry(model: str, entry):
+    if entry is None:
+        params = default_space(model)
+        sampler = DEFAULT_SAMPLERS[model]
+    elif isinstance(entry, list):
+        params = copy.deepcopy(entry)
+        sampler = DEFAULT_SAMPLERS[model]
+    elif isinstance(entry, dict):
+        params = copy.deepcopy(entry.get("params", default_space(model)))
+        sampler = entry.get("sampler", DEFAULT_SAMPLERS[model])
+    else:
+        raise ValueError(
+            f"search_space entry for {model!r} must be a list or dict; got {type(entry).__name__}.")
+    if sampler not in {"grid", "tpe"}:
+        raise ValueError(f"sampler for {model!r} must be 'grid' or 'tpe'; got {sampler!r}.")
+    valid_names = _descriptor_names(_DEFAULT_SPACES[model])
+    for d in params:
+        names = _descriptor_names([d])
+        unknown = sorted(n for n in names if n not in valid_names)
+        if unknown:
+            raise ValueError(
+                f"unknown tunable parameter(s) for {model!r}: {unknown}; "
+                f"valid names are {sorted(valid_names)}.")
+    if sampler == "grid":
+        bad = _grid_bad_descriptor(params)
+        if bad is not None:
+            name, typ = bad
+            raise ValueError(
+                f"{model} grid requested but param {name} is a continuous {typ}; "
+                "use tpe or replace with categorical choices.")
+    return {"params": params, "sampler": sampler}
+
+
+def normalize_search_space(user_space: dict | None) -> dict:
+    """Return {model: {"params": list, "sampler": "grid"|"tpe"}} merged over the
+    built-in defaults."""
+    if user_space:
+        for model in user_space:
+            _validate_model(model)
+    return {
+        model: _normalize_entry(model, user_space.get(model) if user_space else None)
+        for model in VALID_MODELS
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +298,3 @@ def suggest_params(trial, model: str, spec: Optional[list] = None) -> dict:
     return suggest_from_spec(trial, spec)
 
 
-# Which models use Optuna's GridSampler (exhaustive over a discrete grid) vs the
-# default TPE sampler. RF is a grid; the rest are continuous/TPE.
-GRID_MODELS = {"Random forest"}

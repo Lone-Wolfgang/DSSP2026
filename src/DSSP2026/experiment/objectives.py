@@ -134,7 +134,7 @@ def mlp_objective(train, target, feature_sets, numeric_features, flag_features,
                   label_encoder, *, n_splits=5, random_state=42, spec=None):
     """Reuses mlp.tune.cv_macro_f1_with_curves; stores loss curves as user_attrs."""
     from DSSP2026.mlp.tune import cv_macro_f1_with_curves
-    from DSSP2026.tuning.search import TRAIN_CURVE_KEY, EVAL_CURVE_KEY
+    from DSSP2026.experiment.tuning.search import TRAIN_CURVE_KEY, EVAL_CURVE_KEY
 
     y = label_encoder.transform(train[target])
     names = list(feature_sets)
@@ -158,7 +158,7 @@ def xgboost_objective(train, target, feature_sets, label_encoder, *,
                       n_splits=5, random_state=42, spec=None):
     """Reuses xgboost.tune.cv_macro_f1_with_curves; stores loss curves."""
     from DSSP2026.xgboost.tune import cv_macro_f1_with_curves
-    from DSSP2026.tuning.search import TRAIN_CURVE_KEY, EVAL_CURVE_KEY
+    from DSSP2026.experiment.tuning.search import TRAIN_CURVE_KEY, EVAL_CURVE_KEY
 
     y = label_encoder.transform(train[target])
     names = list(feature_sets)

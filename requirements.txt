@@ -18,3 +18,4 @@ transformers[torch]
 optuna-dashboard
 peft
 streamlit
+pyyaml

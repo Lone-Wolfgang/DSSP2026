@@ -72,15 +72,20 @@ def resolve_column_types(df: pd.DataFrame, columns: Sequence[str],
             f"feature_sets reference {len(missing)} column(s) not present in the "
             f"data: {missing}. Check that the dataframe matches the configured "
             f"feature sets (a column may have been renamed or dropped).")
-    resolved = infer_column_types(df, columns)
-    if column_types:
-        for c, t in column_types.items():
-            if c not in columns:
-                continue
-            if t not in VALID_TYPES:
-                raise ValueError(
-                    f"column_types[{c!r}]={t!r} invalid; use one of {VALID_TYPES}.")
-            resolved[c] = t
+    if column_types is None:
+        raise ValueError("schema is required; provide a column role for every feature column.")
+    missing_types = [c for c in columns if c not in column_types]
+    if missing_types:
+        raise ValueError(
+            "schema is missing role(s) for feature column(s): "
+            f"{missing_types}.")
+    resolved = {}
+    for c in columns:
+        t = column_types[c]
+        if t not in VALID_TYPES:
+            raise ValueError(
+                f"schema[{c!r}]={t!r} invalid; use one of {VALID_TYPES}.")
+        resolved[c] = t
     return resolved
 
 

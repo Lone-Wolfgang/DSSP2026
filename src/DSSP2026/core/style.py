@@ -309,5 +309,5 @@ def att_table_styles(context: str = "report"):
 
 
 def att_format_table(*args, **kwargs):
-    from DSSP2026.eda.tables import att_format_table as _att_format_table
+    from DSSP2026.core.tables import att_format_table as _att_format_table
     return _att_format_table(*args, **kwargs)

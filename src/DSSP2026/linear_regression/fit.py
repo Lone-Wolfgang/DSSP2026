@@ -20,7 +20,7 @@ import pandas as pd
 import statsmodels.formula.api as smf
 from patsy import EvalEnvironment
 from statsmodels.regression.linear_model import RegressionResultsWrapper
-from DSSP2026.eda.encoders import FORMULA_NAMESPACE 
+from DSSP2026.core.encoders import FORMULA_NAMESPACE 
 
 
 # ---------------------------------------------------------------------------

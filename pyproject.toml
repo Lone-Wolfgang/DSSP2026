@@ -12,7 +12,8 @@ requires-python = ">=3.9"
 dependencies = [
     "pandas",
     "numpy",
-    "scikit-learn"
+    "scikit-learn",
+    "pyyaml"
 ]
 
 [tool.setuptools]

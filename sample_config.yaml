@@ -1,0 +1,19 @@
+data:
+  train_file: /path/to/train.parquet
+  test_file: /path/to/test.parquet
+  validation_ratio: 0.30
+target: answer
+random_state: 42
+cv_splits: 5
+scoring: f1_macro
+average: macro
+output_root: /path/to/output
+schema:
+  some_numeric_col: numeric
+  some_flag_col: categorical
+feature_sets:
+  all:
+    - some_numeric_col
+    - some_flag_col
+  minimal:
+    - some_numeric_col

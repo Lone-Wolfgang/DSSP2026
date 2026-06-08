@@ -18,7 +18,7 @@ from typing import Mapping, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-from DSSP2026.tuning.search import (
+from DSSP2026.experiment.tuning.search import (
     EVAL_CURVE_KEY,
     TRAIN_CURVE_KEY,
     OptunaSearchResult,

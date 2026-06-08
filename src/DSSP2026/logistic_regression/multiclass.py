@@ -44,7 +44,7 @@ import statsmodels.formula.api as smf
 from patsy import EvalEnvironment
 from statsmodels.discrete.discrete_model import MultinomialResultsWrapper
 
-from DSSP2026.eda.encoders import FORMULA_NAMESPACE
+from DSSP2026.core.encoders import FORMULA_NAMESPACE
 from DSSP2026.core.style import ATT_COLORS
 from DSSP2026.core.figure import save_figure
 from DSSP2026.core.color_scales import so, att_nominal
