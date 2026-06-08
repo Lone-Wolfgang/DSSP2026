@@ -18,10 +18,6 @@ Two ideas hold the package together:
   tuning, the heatmap/confusion primitive, the AT&T brand styling, and the
   shared result containers are written once and reused by every family.
 
-The original toolkit was a four-file-per-family layout you drove by hand. That
-still exists for the regression and per-family work, but the center of gravity
-is now the `Experiment` → `report.db` → `Report` pipeline described below.
-
 
 ## Install
 
