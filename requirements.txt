@@ -19,3 +19,4 @@ optuna-dashboard
 peft
 streamlit
 pyyaml
+umap-learn

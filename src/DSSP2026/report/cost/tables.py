@@ -31,6 +31,18 @@ POLICIES = ("ArgMax", "F1", "Youden's J", "Bayes")
 _POLICY_METRIC = {"F1": "f1", "Youden's J": "youden"}
 
 
+def _text_color(rgb):
+    """White on dark fills, near-black on light, by perceived luminance.
+
+    ``rgb`` is a 3- or 4-tuple of 0..1 floats (matplotlib cmap output). Uses
+    the Rec. 601 luma; threshold 0.5 splits the RdYlGn scale so the saturated
+    red/green ends get white text and the pale midrange keeps dark text.
+    """
+    r, g, b = rgb[0], rgb[1], rgb[2]
+    luma = 0.299 * r + 0.587 * g + 0.114 * b
+    return "white" if luma < 0.5 else "#1A1A1A"
+
+
 # ---------------------------------------------------------------------------
 # Display tables
 # ---------------------------------------------------------------------------
@@ -67,7 +79,7 @@ class PolicyTable:
             "Net Benefit": na["Net benefit"],
         }
 
-    def _build(self, models=None, policies=None):
+    def _build(self, models=None, policies=None, columns=None):
         if models is None and policies is None:
             best_argmax = self._rows[
                 (self._rows["Model"] == self.best_model)
@@ -91,30 +103,51 @@ class PolicyTable:
         out = pd.concat(
             [pd.DataFrame([self._no_action_display_row()]), body],
             ignore_index=True)
-        return out[self._DISPLAY_COLS]
+        cols = self._resolve_columns(columns)
+        return out[cols]
+
+    def _resolve_columns(self, columns):
+        """Validate/normalise a requested column subset (keeps given order).
+
+        ``None`` -> the full default column list. Identifying columns (Model,
+        Policy) are always retained even if omitted, pinned at the front.
+        """
+        if columns is None:
+            return list(self._DISPLAY_COLS)
+        want = [columns] if isinstance(columns, str) else list(columns)
+        unknown = [c for c in want if c not in self._DISPLAY_COLS]
+        if unknown:
+            raise KeyError(
+                f"unknown column(s) {unknown}; "
+                f"choose from {self._DISPLAY_COLS}")
+        keep_id = [c for c in ("Model", "Policy")
+                   if c not in want]
+        return keep_id + want
 
     @property
     def df(self):
         return self._build()
 
-    def styler(self, *, models=None, policies=None):
+    def styler(self, *, models=None, policies=None, columns=None):
+        frame = self._build(models=models, policies=policies, columns=columns)
+        cur = [c for c in self._CURRENCY if c in frame.columns]
         return style_cost_table(
-            self._build(models=models, policies=policies),
-            currency_cols=self._CURRENCY, abbreviate=self._abbrev)
+            frame, currency_cols=cur, abbreviate=self._abbrev)
 
-    def show(self, *, models=None, policies=None):
-        sty = self.styler(models=models, policies=policies)
+    def show(self, *, models=None, policies=None, columns=None):
+        sty = self.styler(models=models, policies=policies, columns=columns)
         try:
             from IPython.display import display
             display(sty)
         except ImportError:
-            print(self._build(models=models, policies=policies)
-                  .to_string(index=False))
+            print(self._build(models=models, policies=policies,
+                              columns=columns).to_string(index=False))
 
-    def save(self, path, *, models=None, policies=None, dpi=220):
+    def save(self, path, *, models=None, policies=None, columns=None, dpi=220):
+        frame = self._build(models=models, policies=policies, columns=columns)
+        cur = [c for c in self._CURRENCY if c in frame.columns]
         return _save_table_png(
-            self._build(models=models, policies=policies), path,
-            currency_cols=self._CURRENCY, abbreviate=self._abbrev, dpi=dpi,
+            frame, path, currency_cols=cur, abbreviate=self._abbrev, dpi=dpi,
             title="Policy comparison — net benefit")
 
 
@@ -137,25 +170,61 @@ class ClassBreakdownTable:
     def df(self):
         return self._frame
 
-    def styler(self):
-        return style_cost_table(self._frame, currency_cols=self._CURRENCY,
+    def _build(self, rows=None, columns=None):
+        out = self._frame
+        if rows is not None:
+            want = [rows] if isinstance(rows, str) else list(rows)
+            want = [str(r) for r in want]
+            mask = out["Class"].astype(str).isin(want)
+            missing = set(want) - set(out["Class"].astype(str))
+            if missing:
+                raise KeyError(f"unknown class label(s) {sorted(missing)}")
+            out = out[mask].reset_index(drop=True)
+        cols = self._resolve_columns(columns)
+        return out[cols]
+
+    def _resolve_columns(self, columns):
+        if columns is None:
+            return [c for c in self._DISPLAY_COLS if c in self._frame.columns]
+        want = [columns] if isinstance(columns, str) else list(columns)
+        unknown = [c for c in want if c not in self._frame.columns]
+        if unknown:
+            raise KeyError(
+                f"unknown column(s) {unknown}; "
+                f"choose from {list(self._frame.columns)}")
+        keep_id = ["Class"] if "Class" not in want else []
+        return keep_id + want
+
+    def styler(self, *, rows=None, columns=None):
+        frame = self._build(rows=rows, columns=columns)
+        cur = [c for c in self._CURRENCY if c in frame.columns]
+        return style_cost_table(frame, currency_cols=cur,
                                 abbreviate=self._abbrev)
 
-    def show(self):
+    def show(self, *, rows=None, columns=None):
         try:
             from IPython.display import display
-            display(self.styler())
+            display(self.styler(rows=rows, columns=columns))
         except ImportError:
-            print(self._frame.to_string(index=False))
+            print(self._build(rows=rows, columns=columns)
+                  .to_string(index=False))
 
-    def save(self, path, *, dpi=220):
+    def save(self, path, *, rows=None, columns=None, dpi=220):
+        frame = self._build(rows=rows, columns=columns)
+        cur = [c for c in self._CURRENCY if c in frame.columns]
         return _save_table_png(
-            self._frame, path, currency_cols=self._CURRENCY,
+            frame, path, currency_cols=cur,
             abbreviate=self._abbrev, dpi=dpi, title="Per-class breakdown")
 
 
 def _save_table_png(frame, path, *, currency_cols, abbreviate, dpi, title):
-    """Render a styled cost table to PNG via matplotlib (no browser needed)."""
+    """Render a styled cost table to PNG via matplotlib (no browser needed).
+
+    Sized to fit the data rather than a fixed canvas: each column gets a width
+    proportional to its widest cell, the figure is the sum of those widths, and
+    ``bbox_inches="tight"`` trims the margins. The result drops cleanly onto a
+    13.33×7.5in widescreen PowerPoint slide without manual rescaling.
+    """
     import matplotlib.pyplot as plt
     import matplotlib as mpl
     from DSSP2026.core.style import ATT_COLORS
@@ -175,17 +244,47 @@ def _save_table_png(frame, path, *, currency_cols, abbreviate, dpi, title):
     norm = mpl.colors.Normalize(vmin=-max_abs, vmax=max_abs)
 
     n_rows, n_cols = disp.shape
-    fig, ax = plt.subplots(figsize=(min(2 + 1.5 * n_cols, 16),
-                                    0.6 * (n_rows + 1) + 0.4))
+
+    # --- content-proportional column widths -------------------------------
+    # Width of each column = widest of its header / cells, measured in chars,
+    # converted to inches. Clamped so a stray long cell can't blow out the
+    # layout and a 2-char column ("TP") still reads.
+    CHAR_IN = 0.082         # ~inches per character at fontsize 10
+    PAD_IN = 0.22           # left+right cell padding
+    MIN_COL, MAX_COL = 0.55, 2.6
+    str_cells = disp.astype(str)
+    col_w = []
+    for j, name in enumerate(disp.columns):
+        widest = max([len(str(name))] +
+                     [len(s) for s in str_cells.iloc[:, j]])
+        w = widest * CHAR_IN + PAD_IN
+        col_w.append(min(max(w, MIN_COL), MAX_COL))
+    total_w = sum(col_w)
+    # Keep within a slide's usable width (~10in leaves generous margins).
+    if total_w > 10.0:
+        scale = 10.0 / total_w
+        col_w = [w * scale for w in col_w]
+        total_w = 10.0
+    col_frac = [w / total_w for w in col_w]
+
+    row_h_in = 0.42
+    fig_w = total_w
+    fig_h = row_h_in * (n_rows + 1) + 0.6   # +1 header, +title room
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    fig.patch.set_alpha(0.0)
+    ax.patch.set_alpha(0.0)
     ax.axis("off")
+
     tbl = ax.table(cellText=disp.values, colLabels=list(disp.columns),
-                   cellLoc="center", loc="center")
+                   colWidths=col_frac, cellLoc="center", loc="center")
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(10)
     tbl.scale(1, 1.4)
 
     navy = ATT_COLORS.get("navy", "#002A5C")
     for (r, c), cell in tbl.get_celld().items():
+        cell.set_edgecolor("white")
+        cell.set_linewidth(0.6)
         if r == 0:
             cell.set_facecolor(navy)
             cell.set_text_props(color="white", weight="bold")
@@ -194,14 +293,22 @@ def _save_table_png(frame, path, *, currency_cols, abbreviate, dpi, title):
             if col_name in cur:
                 raw = frame.iloc[r - 1][col_name]
                 try:
-                    cell.set_facecolor(cmap(norm(float(raw))))
+                    rgba = cmap(norm(float(raw)))
+                    cell.set_facecolor(rgba)
+                    cell.set_text_props(color=_text_color(rgba))
                 except (TypeError, ValueError):
                     pass
     ax.set_title(title, fontsize=12, color=navy, weight="bold", pad=12)
-    fig.tight_layout()
 
     from DSSP2026.core.figure import save_figure
-    out = save_figure(fig, path, dpi=dpi)
+    fig.set_layout_engine("tight")
+    try:
+        out = save_figure(fig, path, dpi=dpi, bbox_inches="tight",
+                          transparent=True)
+    except TypeError:
+        # save_figure doesn't forward **kwargs to savefig; the per-patch alpha
+        # set above still yields a transparent background.
+        out = save_figure(fig, path, dpi=dpi)
     plt.close(fig)
     return out
 
@@ -254,12 +361,33 @@ class CostConfusion:
         raise ValueError(
             f"text must be 'counts', 'currency', or 'both'; got {self.text!r}.")
 
-    @property
-    def df(self):
-        """Cell-text DataFrame (true rows × predicted cols)."""
-        labels = self.class_labels
-        data = [[self._cell_text(i, j) for j in range(len(labels))]
-                for i in range(len(labels))]
+    def _select_idx(self, rows):
+        """Resolve a row/col label selection to positional indices.
+
+        Square submatrix: the same labels index both axes. ``None`` -> all.
+        Order follows the request; unknown labels raise.
+        """
+        if rows is None:
+            return list(range(len(self.class_labels)))
+        want = [rows] if isinstance(rows, str) else list(rows)
+        want = [str(r) for r in want]
+        pos = {lab: i for i, lab in enumerate(self.class_labels)}
+        missing = [w for w in want if w not in pos]
+        if missing:
+            raise KeyError(
+                f"unknown class label(s) {missing}; "
+                f"choose from {self.class_labels}")
+        return [pos[w] for w in want]
+
+    def df(self, *, rows=None):
+        """Cell-text DataFrame (true rows × predicted cols).
+
+        ``rows`` selects a square submatrix by class label (same labels on both
+        axes). Note this is a method (call ``.df()``); selection needs an arg.
+        """
+        idx = self._select_idx(rows)
+        labels = [self.class_labels[i] for i in idx]
+        data = [[self._cell_text(i, j) for j in idx] for i in idx]
         out = pd.DataFrame(data, index=labels, columns=labels)
         out.index.name = "True"
         out.columns.name = "Predicted"
@@ -269,59 +397,73 @@ class CostConfusion:
         m = float(np.nanmax(np.abs(self.value))) if self.value.size else 0.0
         return m if (np.isfinite(m) and m > 0) else 1.0
 
-    def styler(self):
-        """pandas Styler: shaded grid, no colorbar (for notebook display)."""
+    def styler(self, *, rows=None):
+        """pandas Styler: shaded grid, no colorbar (for notebook display).
+
+        ``rows`` selects a square submatrix by label; the colour scale stays
+        fixed to the full matrix so submatrices remain comparable.
+        """
         import matplotlib as mpl
-        labels = self.class_labels
-        text_df = self.df
-        max_abs = self._max_abs()
+        idx = self._select_idx(rows)
+        text_df = self.df(rows=rows)
+        max_abs = self._max_abs()          # full-matrix scale, fixed
         cmap = mpl.colormaps["RdYlGn"]
         norm = mpl.colors.Normalize(vmin=-max_abs, vmax=max_abs)
 
         def _style(_):
             css = pd.DataFrame("", index=text_df.index, columns=text_df.columns)
-            for i in range(len(labels)):
-                for j in range(len(labels)):
-                    r, g, b, _ = cmap(norm(self.value[i, j]))
-                    # Explicit dark text — never inherit the theme's grey, which
-                    # is unreadable on the RdYlGn fills. white-space: pre-line
-                    # makes the "both" newline render in HTML.
-                    css.iat[i, j] = (
+            for a, i in enumerate(idx):
+                for b, j in enumerate(idx):
+                    rgba = cmap(norm(self.value[i, j]))
+                    r, g, bch, _ = rgba
+                    # Text colour by fill luminance: white on saturated
+                    # red/green ends, dark on the pale midrange. white-space:
+                    # pre-line makes the "both" newline render in HTML.
+                    css.iat[a, b] = (
                         f"background-color: rgb({int(r*255)},{int(g*255)},"
-                        f"{int(b*255)}); color: #1A1A1A; font-weight: 600; "
-                        f"text-align: center; white-space: pre-line;")
+                        f"{int(bch*255)}); color: {_text_color(rgba)}; "
+                        f"font-weight: 600; text-align: center; "
+                        f"white-space: pre-line;")
             return css
 
         return text_df.style.apply(_style, axis=None)
 
-    def show(self):
+    def show(self, *, rows=None):
         try:
             from IPython.display import display
-            display(self.styler())
+            display(self.styler(rows=rows))
         except ImportError:
-            print(self.df.to_string())
+            print(self.df(rows=rows).to_string())
 
-    def save(self, path, *, dpi=220):
-        """Matplotlib PNG: shaded grid + currency colorbar on the right."""
+    def save(self, path, *, rows=None, dpi=220):
+        """Matplotlib PNG: shaded grid + currency colorbar on the right.
+
+        ``rows`` selects a square submatrix by label; the colour scale (and
+        colorbar) stays fixed to the full matrix.
+        """
         import matplotlib.pyplot as plt
         import matplotlib as mpl
         from DSSP2026.core.style import ATT_COLORS
         from DSSP2026.core.figure import save_figure
 
-        labels = self.class_labels
+        idx = self._select_idx(rows)
+        labels = [self.class_labels[i] for i in idx]
         K = len(labels)
-        max_abs = self._max_abs()
+        sub_val = self.value[np.ix_(idx, idx)]
+        max_abs = self._max_abs()          # full-matrix scale, fixed
         cmap = mpl.colormaps["RdYlGn"]
         norm = mpl.colors.Normalize(vmin=-max_abs, vmax=max_abs)
         navy = ATT_COLORS.get("navy", "#002A5C")
 
         fig, ax = plt.subplots(figsize=(1.2 + 1.1 * K, 1.0 + 1.0 * K))
-        ax.imshow(self.value, cmap=cmap, norm=norm, aspect="equal")
+        fig.patch.set_alpha(0.0)
+        ax.patch.set_alpha(0.0)
+        ax.imshow(sub_val, cmap=cmap, norm=norm, aspect="equal")
 
-        for i in range(K):
-            for j in range(K):
-                ax.text(j, i, self._cell_text(i, j), ha="center", va="center",
-                        fontsize=10, color="#1A1A1A")
+        for a, i in enumerate(idx):
+            for b, j in enumerate(idx):
+                ax.text(b, a, self._cell_text(i, j), ha="center", va="center",
+                        fontsize=10, color=_text_color(cmap(norm(self.value[i, j]))))
 
         ax.set_xticks(range(K)); ax.set_yticks(range(K))
         ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=10)
@@ -344,7 +486,10 @@ class CostConfusion:
         cbar.ax.tick_params(labelsize=9)
 
         fig.tight_layout()
-        out = save_figure(fig, path, dpi=dpi)
+        try:
+            out = save_figure(fig, path, dpi=dpi, transparent=True)
+        except TypeError:
+            out = save_figure(fig, path, dpi=dpi)
         plt.close(fig)
         return out
 

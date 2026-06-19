@@ -14,3 +14,6 @@ project
 data
 telelogs
 cleanup.md
+*.R
+leak_audit.py
+training_flowchart.*

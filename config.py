@@ -14,16 +14,17 @@ from pathlib import Path
 # / --output-root if you move the data or want a different run folder.
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path("/Users/jwkle/Documents/DSSP")
+_DATA_ROOT = _REPO_ROOT / "project/data/preprocessed/Telelogs_resample"
 
 TRAIN_FILE = Path(os.getenv(
     "DSSP_TRAIN_FILE",
-    _REPO_ROOT / "project/data/preprocessed/TeleLogs/train.parquet"))
+    _DATA_ROOT / "train.parquet"))
 TEST_FILE = Path(os.getenv(
     "DSSP_TEST_FILE",
-    _REPO_ROOT / "project/data/preprocessed/TeleLogs/test.parquet"))
+    _DATA_ROOT / "test.parquet"))
 OUTPUT_ROOT = Path(os.getenv(
     "DSSP_OUTPUT_ROOT",
-    _REPO_ROOT / "project/curriculum/TeleLogs/outputs_workflow"))
+    _REPO_ROOT / "project/curriculum/TeleLogs/outputs_resample"))
 
 # Study artifact database (one append-only SQLite file across runs). Override
 # with DSSP_STUDY_DB or the CLI's --study-db. Defaults under OUTPUT_ROOT.

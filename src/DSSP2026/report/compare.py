@@ -15,6 +15,8 @@ class CompareMixin:
     def compare_models(self, models: Optional[Sequence[str]] = None, *,
                        policy: str = "ArgMax",
                        allow_ensemble: bool = False,
+                       average: str = "macro",
+                       positive_class=None,
                        sort_by: str = "F1", ascending: bool = False,
                        decimals: int = 4,
                        n_splits: int = 5,
@@ -60,9 +62,21 @@ class CompareMixin:
             here represents a thresholded decision policy scored on test.)
         """
         from DSSP2026.report.policy import (
-            validate_policy, decisions_under_policy, metrics_from_decisions)
+            validate_policy, decisions_under_policy)
         from DSSP2026.report.cost.fit import _column_types
         validate_policy(policy)
+
+        _VALID_AVG = {"binary", "micro", "macro", "weighted", None}
+        if average not in _VALID_AVG:
+            raise ValueError(
+                f"average must be one of {sorted(str(a) for a in _VALID_AVG)}; "
+                f"got {average!r}.")
+        if average == "binary" and positive_class is None:
+            raise ValueError(
+                "average='binary' requires positive_class=<label>.")
+        if positive_class is not None and average != "binary":
+            # positive_class only governs the 'binary' average; warn-free coerce.
+            average = "binary"
 
         real = self.models(include_ensemble=False)
         if models is not None:
@@ -107,7 +121,8 @@ class CompareMixin:
                     estimators, test_df, class_order)
                 y_true = np.asarray(test_df[test_target], dtype=object)
             y_pred = decisions_under_policy(policy, class_order, test_proba, thr)
-            scored = metrics_from_decisions(y_true, y_pred, class_order)
+            scored = self._score_decisions(
+                y_true, y_pred, class_order, average, positive_class)
             records.append({
                 "Model": name,
                 "Accuracy": scored["accuracy"], "Precision": scored["precision"],
@@ -121,9 +136,53 @@ class CompareMixin:
         df[num_cols] = df[num_cols].round(decimals)
 
         policy_note = "" if policy == "ArgMax" else f", {policy} policy"
+        if average == "binary":
+            avg_note = f", binary[pos={positive_class}]"
+        elif average is None:
+            avg_note = ""
+        else:
+            avg_note = f", {average}-avg"
         title = (f"Model comparison — held-out TEST {self.experiment_id} "
-                 f"(best row by {sort_by}{policy_note})")
+                 f"(best row by {sort_by}{policy_note}{avg_note})")
         return ReportTable(df.reset_index(drop=True), best_by=sort_by, title=title)
+
+    @staticmethod
+    def _score_decisions(y_true, y_pred, class_order, average, positive_class):
+        """Accuracy + precision/recall/F1 under a chosen averaging scheme.
+
+        average:
+          - "macro"    (default): unweighted mean over classes — every class
+            counts equally regardless of support. On imbalanced data this is
+            the honest summary (the rare class isn't drowned out).
+          - "weighted": support-weighted mean — tracks the majority class and
+            tends to read high when one class dominates.
+          - "micro":   global tally over all decisions (== accuracy for
+            single-label).
+          - "binary":  metrics for `positive_class` only. Use this to score the
+            fraud class directly in a binary problem.
+          - None:      no averaging — precision/recall/f1 returned as the
+            per-class vector aligned to class_order (advanced; the table will
+            store the array).
+        """
+        from sklearn.metrics import (
+            accuracy_score, precision_recall_fscore_support)
+
+        if average == "binary":
+            if positive_class not in set(class_order):
+                raise ValueError(
+                    f"positive_class={positive_class!r} not in classes "
+                    f"{list(class_order)}.")
+            p, r, f, _ = precision_recall_fscore_support(
+                y_true, y_pred, labels=[positive_class],
+                average="binary", pos_label=positive_class, zero_division=0)
+        else:
+            p, r, f, _ = precision_recall_fscore_support(
+                y_true, y_pred, labels=list(class_order),
+                average=average, zero_division=0)
+        return {
+            "accuracy": accuracy_score(y_true, y_pred),
+            "precision": p, "recall": r, "f1": f,
+        }
 
     def classification_report(self, model: Optional[str] = None, *,
                               metric: Optional[str] = None,
